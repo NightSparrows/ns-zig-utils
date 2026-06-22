@@ -92,14 +92,3 @@ pub fn eqlRaw(self: *const Self, other: []const u8) bool {
 pub fn empty(self: *Self) bool {
     return self.size == 0;
 }
-
-test "zig string" {
-    const hello = "hello";
-
-    const testStruct = struct {
-        pub fn testFunc(str: []const u8) void {
-            std.debug.print("str len: {}\n", .{str.len});
-        }
-    };
-    testStruct.testFunc(hello);
-}
