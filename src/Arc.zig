@@ -6,6 +6,7 @@ pub fn Arc(comptime T: type) type {
     return struct {
         const Self = @This();
 
+        allocator: std.mem.Allocator,
         value: T,
         strong: std.atomic.Value(usize),
 
@@ -13,6 +14,7 @@ pub fn Arc(comptime T: type) type {
         pub fn init(allocator: std.mem.Allocator, value: T) !*Self {
             const self = try allocator.create(Self);
             self.* = .{
+                .allocator = allocator,
                 .value = value,
                 .strong = std.atomic.Value(usize).init(1),
             };
@@ -25,6 +27,7 @@ pub fn Arc(comptime T: type) type {
             const self = try allocator.create(Self);
 
             self.* = .{
+                .allocator = allocator,
                 .value = undefined,
                 .strong = std.atomic.Value(usize).init(1),
             };
@@ -41,7 +44,7 @@ pub fn Arc(comptime T: type) type {
         /// I think you should set null after calling this function
         /// a.deref()
         /// a = undefeined;
-        pub fn deref(self: *Self, allocator: std.mem.Allocator) void {
+        pub fn deref(self: *Self) void {
             if (self.strong.fetchSub(1, .acq_rel) == 1) {
                 if (comptime std.meta.hasMethod(T, "deinit")) {
                     const deinit_info = @typeInfo(@TypeOf(T.deinit));
@@ -52,13 +55,13 @@ pub fn Arc(comptime T: type) type {
                         if (params.len == 1) {
                             self.value.deinit();
                         } else if (params.len == 2) {
-                            self.value.deinit(allocator);
+                            self.value.deinit(self.allocator);
                         } else {
                             @compileError("Arc: " ++ @typeName(T) ++ ".deinit not accepted.");
                         }
                     }
                 }
-                allocator.destroy(self);
+                self.allocator.destroy(self);
             }
         }
     };
@@ -98,12 +101,12 @@ test "Arc: 基礎引用與無參數 deinit 測試" {
     try testing.expectEqual(@as(usize, 2), my_arc.strong.load(.monotonic));
 
     // 3. 測試第一次釋放 (計數變 1，不該觸發 deinit)
-    my_arc.deref(allocator);
+    my_arc.deref();
     try testing.expect(!deinit_called);
     try testing.expectEqual(@as(usize, 1), my_arc.strong.load(.monotonic));
 
     // 4. 測試最後一次釋放 (計數變 0，應該觸發 deinit 並銷毀)
-    my_arc.deref(allocator);
+    my_arc.deref();
     try testing.expect(deinit_called);
 }
 
@@ -123,7 +126,7 @@ test "Arc: 帶參數 deinit(allocator) 測試" {
     var my_arc = try Arc(MockResourceWithAlloc).init(allocator, res);
 
     // 釋放，應該會自動辨識並傳入 allocator 給 deinit
-    my_arc.deref(allocator);
+    my_arc.deref();
     try testing.expect(deinit_called);
 }
 
@@ -136,7 +139,7 @@ test "Arc: create(undefined) 延遲初始化測試" {
     // 延遲填入值 (類似 Vulkan API 的操作)
     my_arc.value = MockResourceNoAlloc{ .deinit_called = &deinit_called };
 
-    my_arc.deref(allocator);
+    my_arc.deref();
     try testing.expect(deinit_called);
 }
 
@@ -147,7 +150,6 @@ test "Arc: 壓力測試 - 多執行緒併發安全性" {
 
     const workerFunc = struct {
         pub fn workerFunc(
-            p_allocator: std.mem.Allocator,
             p_arc_ptr: anytype,
             p_io: std.Io,
             p_start_gate: *std.atomic.Value(bool),
@@ -157,7 +159,7 @@ test "Arc: 壓力測試 - 多執行緒併發安全性" {
             }
 
             const local_ref = p_arc_ptr.ref();
-            defer local_ref.deref(p_allocator);
+            defer local_ref.deref();
             try std.Io.sleep(p_io, std.Io.Duration.fromNanoseconds(5 * std.time.ns_per_ms), .awake);
         }
     }.workerFunc;
@@ -172,7 +174,6 @@ test "Arc: 壓力測試 - 多執行緒併發安全性" {
 
     for (&threads) |*t| {
         t.* = try std.Thread.spawn(.{}, workerFunc, .{
-            allocator,
             my_arc,
             testing.io,
             &start_gate,
@@ -188,6 +189,6 @@ test "Arc: 壓力測試 - 多執行緒併發安全性" {
     try testing.expectEqual(@as(usize, 1), my_arc.strong.load(.monotonic));
     try testing.expect(!deinit_called);
 
-    my_arc.deref(allocator);
+    my_arc.deref();
     try testing.expect(deinit_called);
 }
