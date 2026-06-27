@@ -48,6 +48,10 @@ pub fn UnorderedSet(comptime T: type, comptime TContext: type) type {
             return self.hash_map.remove(value);
         }
 
+        pub fn clear(self: *Self) void {
+            self.hash_map.clearRetainingCapacity();
+        }
+
         pub fn contain(self: *Self, value: T) bool {
             return self.hash_map.contains(value);
         }

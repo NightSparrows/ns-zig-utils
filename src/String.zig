@@ -8,17 +8,14 @@ content: std.ArrayList(u8) = .empty,
 // string size
 size: usize = 0,
 
-pub fn init(allocator: std.mem.Allocator) !Self {
-    var ret: Self = .{};
-
-    try ret.content.append(allocator, '\x00');
-    return ret;
+pub fn init(self: *Self, allocator: std.mem.Allocator) !void {
+    self.* = .{};
+    try self.content.append(allocator, '\x00');
 }
 
-pub fn initWithValue(allocator: std.mem.Allocator, value: []const u8) !Self {
-    var ret = Self{};
-    try ret.append(allocator, value);
-    return ret;
+pub fn initWithValue(self: *Self, allocator: std.mem.Allocator, value: []const u8) !void {
+    self.* = .{};
+    try self.append(allocator, value);
 }
 
 pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
