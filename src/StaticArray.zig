@@ -16,13 +16,14 @@ pub fn StaticArray(comptime T: type, comptime max_size: usize) type {
             return self.value[0..self.size];
         }
 
-        pub fn append(self: *Self, value: T) Error!void {
+        pub fn append(self: *Self, value: T) Error!*T {
             if (self.size >= max_size) {
                 return Error.Overflow;
             }
 
             self.value[self.size] = value;
             self.size += 1;
+            return &self.value[self.size - 1];
         }
 
         // add one with uninit value
